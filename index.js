@@ -6,51 +6,56 @@ const path = require("path");
 const PACKAGE_JSON_SECTION = "staticFiles";
 
 const staticCopyPlugin = new Reporter({
-  async report({ event, options }) {
-    if (event.type === "buildSuccess") {
-      let config = Object.assign({}, getSettings(options.projectRoot));
+    async report({ event, options }) {
+        if (event.type === "buildSuccess") {
+            let config = Object.assign({}, getSettings(options.projectRoot));
 
-      // Get all dist dir from targets, we'll copy static files into them
-      let targets = Array.from(
-        new Set(
-          event.bundleGraph
-            .getBundles()
-            .filter((b) => b.target && b.target.distDir)
-            .map((b) => b.target.distDir)
-        )
-      );
+            // Get all dist dir from targets, we'll copy static files into them
+            let targets = Array.from(
+                new Set(
+                    event.bundleGraph
+                    .getBundles()
+                    .filter((b) => b.target && b.target.distDir)
+                    .map((b) => b.target)
+                )
+            );
 
-      let distPaths = config.distDir ? [config.distDir] : targets;
+            targets.forEach((t, i) => {
+                let tconfig = config[t.name];
 
-      if (config.staticOutPath) {
-        distPaths = distPaths.map((p) => path.join(p, config.staticOutPath));
-      }
+                if (!tconfig) return;
 
-      let staticPath =
-        config.staticPath || path.join(options.projectRoot, "static");
+                console.log(`target ${t.name} config ${JSON.stringify(tconfig)}`);
 
-      for (let distPath of distPaths) {
-        copyDir(staticPath, distPath);
-      }
-    }
-  },
+                let distPath = tconfig.distDir ? tconfig.distDir : t.distDir;
+
+                if (tconfig.staticOutPath) {
+                    distPath = path.join(distPath, tconfig.staticOutPath);
+                }
+
+                let staticPath = tconfig.staticPath || path.join(options.projectRoot, "static");
+
+                copyDir(staticPath, distPath);
+            });
+        }
+    },
 });
 
 const copyDir = (copyFrom, copyTo) => {
-  if (!fs.existsSync(copyTo)) {
-    fs.mkdirSync(copyTo, { recursive: true });
-  }
-  const copy = (filepath, relative, filename) => {
-    const dest = path.join(copyTo, relative);
-    if (!filename) {
-      if (!fs.existsSync(dest)) {
-        fs.mkdirSync(dest, { recursive: true });
-      }
-    } else {
-      fs.copyFileSync(filepath, dest);
+    if (!fs.existsSync(copyTo)) {
+        fs.mkdirSync(copyTo, { recursive: true });
     }
-  };
-  recurseSync(copyFrom, copy);
+    const copy = (filepath, relative, filename) => {
+        const dest = path.join(copyTo, relative);
+        if (!filename) {
+            if (!fs.existsSync(dest)) {
+                fs.mkdirSync(dest, { recursive: true });
+            }
+        } else {
+            fs.copyFileSync(filepath, dest);
+        }
+    };
+    recurseSync(copyFrom, copy);
 };
 
 /**
@@ -62,31 +67,31 @@ const copyDir = (copyFrom, copyTo) => {
  * @param callback function to be run on every file/directory
  */
 const recurseSync = (dirpath, callback) => {
-  const rootpath = dirpath;
+    const rootpath = dirpath;
 
-  function recurse(dirpath) {
-    fs.readdirSync(dirpath).forEach(function (filename) {
-      const filepath = path.join(dirpath, filename);
-      const stats = fs.statSync(filepath);
-      const relative = path.relative(rootpath, filepath);
+    function recurse(dirpath) {
+        fs.readdirSync(dirpath).forEach(function(filename) {
+            const filepath = path.join(dirpath, filename);
+            const stats = fs.statSync(filepath);
+            const relative = path.relative(rootpath, filepath);
 
-      if (stats.isDirectory()) {
-        callback(filepath, relative);
-        recurse(filepath);
-      } else {
-        callback(filepath, relative, filename);
-      }
-    });
-  }
+            if (stats.isDirectory()) {
+                callback(filepath, relative);
+                recurse(filepath);
+            } else {
+                callback(filepath, relative, filename);
+            }
+        });
+    }
 
-  recurse(dirpath);
+    recurse(dirpath);
 };
 
 const getSettings = (projectRoot) => {
-  let packageJson = JSON.parse(
-    fs.readFileSync(path.join(projectRoot, "package.json"))
-  );
-  return Object.assign({}, packageJson[PACKAGE_JSON_SECTION]);
+    let packageJson = JSON.parse(
+        fs.readFileSync(path.join(projectRoot, "package.json"))
+    );
+    return Object.assign({}, packageJson[PACKAGE_JSON_SECTION]);
 };
 
 exports.default = staticCopyPlugin;
